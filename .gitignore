@@ -160,7 +160,9 @@ cython_debug/
 .idea/
 
 
-
+model/
+data/
+tokenizer/
 *.ipynb
 *.parquet
 *.out

@@ -10,7 +10,7 @@ from tensorflow.keras import backend as K
 from convert import InputConverter
 
 TOKENIZER_PATH = './tokenizer'
-MODEL_PATH = './model/itc_section7_rnn_sk_220419'
+MODEL_PATH = './model'
 DATA_PATH = './data'
 
 
