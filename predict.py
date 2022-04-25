@@ -25,45 +25,37 @@ class PredictingITC:
     def _load_converter(self, tokenizer_path, label_encoder_path):
         if tokenizer_path:
             with open(tokenizer_path,'r',encoding='utf-8') as file:
-                tokenzier = json.load(file)
+                tokenzier_json = json.load(file)
+            tokenzier = tokenizer_from_json(tokenzier_json)
             self.input_converter = InputConverter(tokenizer=tokenzier, max_len=self.max_len)
 
         if label_encoder_path:
             with open(label_encoder_path, 'r', encoding='utf-8') as file:
-                self.output_converter = json.load(file)
+                self.output_converter_dict = json.load(file)
 
-    def main(self, text_sequence):
+    def main(self, text_sequence, rank_limit=None):
         if isinstance(text_sequence, str):
             text_sequence = [text_sequence]
         input_data = self.input_converter.main(text_sequence=text_sequence)
-        predicted_result = self.model.predict(input_data)
-        predicted_result = np.argmax(predicted_result, axis=1)
-        itc_sequence = [self.output_converter(idx) for idx in predicted_result]
-        return itc_sequence
+        predicted_results = self.model.predict(input_data)
+
+        if not rank_limit:
+            predicted_result = np.argmax(predicted_results, axis=1)
+            itc_sequence = [self.output_converter_dict[str(idx)] for idx in predicted_result]
+            return itc_sequence
+
+        predicted_label_percent_dict_list = []
+        for predicted_ in predicted_results:
+
+            # 확률 내림차순 정렬
+            _rank_array = predicted_.argsort()[::-1]
+            predicted_label_percent_dict = {}
+            for rank_number in range(0, rank_limit):
+                _predicted_label, _probability = _rank_array[rank_number], 100 * predicted_[_rank_array[rank_number]]
+                _predicted_label = self.output_converter_dict[str(_predicted_label)]
+                _probability = "{:2.2f}%".format(_probability)
+                predicted_label_percent_dict.update({_predicted_label:_probability})
+            predicted_label_percent_dict_list.append(predicted_label_percent_dict)
+        return predicted_label_percent_dict_list
 
 
-if __name__ == '__main__':
-    import pandas as pd
-    import random
-    from sklearn.metrics import confusion_matrix, f1_score
-
-    ds = pd.read_parquet("./data/filtering_basic_sk.parquet")
-    choice_idx = random.sample(ds.index.to_list(), 1)
-    sample_ds = ds.loc[ds.index.isin(choice_idx)]
-
-
-    tokenizer_path = "tokenizer/tipa_sbjt_sk_2_tokenizer.json"
-
-    model_path = './model/itc_subclass544_rnn_sk_220420'
-    label_encoder_path = 'model/itc_subclass544_rnn_sk_220420/dataset/label_encoder.json'
-    y_true = sample_ds.doc_subclass
-
-    # model_path = './model/itc_section7_rnn_sk_220419'
-    # label_encoder_path = 'model/itc_section7_rnn_sk_220419/dataset/label_encoder.json'
-    # y_true = sample_ds.doc_subclass.str[:3]
-
-    predictor = PredictingITC(model_path, tokenizer_path, label_encoder_path)
-    result = predictor.main(sample_ds.text)
-
-    confu = confusion_matrix(y_true,result)
-    f1 = f1_score(y_true,result,average='weighted')
